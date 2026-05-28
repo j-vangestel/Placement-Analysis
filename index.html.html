@@ -1,0 +1,1890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Placement Analysis Tool</title>
+<meta name="description" content="Amazon Ads placement analysis tool — review SP &amp; SB performance by placement, spot bleeders and wasted spend at a glance.">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:title" content="Placement Analysis Tool">
+<meta property="og:description" content="Analyse Amazon Sponsored Products &amp; Sponsored Brands placement performance. Alerts for Wasted Spend and Bleeders built in.">
+<meta property="og:type" content="website">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12; --surface: #16161d; --surface2: #1e1e28; --border: #28283a;
+    --accent: #6366f1; --accent2: #f43f5e; --accent3: #2dd4a0; --accent4: #f59e0b;
+    --text: #ececf1; --muted: #6b6b85;
+    --good: #2dd4a0; --warn: #f59e0b; --bad: #f43f5e;
+    --top: #6366f1; --rest: #8b5cf6; --prod: #6b6b85;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(circle at top left, rgba(99,102,241,0.10), transparent 35%);
+    pointer-events: none; z-index: -1;
+  }
+
+  header { display:flex; align-items:center; justify-content:space-between; padding:18px 32px; border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; }
+  .logo { display:flex; flex-direction:column; line-height:1.1; font-size:13px; font-weight:700; letter-spacing:0.15em; text-transform:uppercase; color:var(--accent); }
+  .logo span { color:var(--text); }
+  .logo-sub { font-size:9px; letter-spacing:0.18em; color:var(--muted); margin-top:4px; font-weight:600; text-transform:uppercase; }
+  .header-status { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); }
+
+  .tabs { display:flex; gap:0; border-bottom:1px solid var(--border); background:var(--surface); padding:0 32px; overflow-x:auto; }
+  .tab { font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); padding:14px 20px; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; transition:all 0.2s; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  .main { padding:32px; max-width:1600px; margin:0 auto; }
+
+  /* UPLOAD */
+  #upload-section { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:70vh; gap:20px; }
+  .upload-row { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; width:100%; max-width:900px; }
+  .upload-box { border:2px dashed var(--border); border-radius:16px; padding:36px 32px; text-align:center; cursor:pointer; transition:all 0.3s; background:var(--surface); flex:1; min-width:280px; position:relative; }
+  .upload-box:hover, .upload-box.drag { border-color:var(--accent); background:#1a1a26; box-shadow:0 0 0 4px rgba(99,102,241,0.08), inset 0 0 24px rgba(99,102,241,0.04); }
+  .upload-box.loaded { border-color:var(--good); border-style:solid; }
+  .upload-icon { font-size:32px; margin-bottom:12px; }
+  .upload-title { font-size:15px; font-weight:700; margin-bottom:6px; }
+  .upload-sub { font-size:12px; color:var(--muted); line-height:1.5; }
+  .upload-tag { display:inline-block; margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:10px; padding:4px 10px; background:var(--surface2); border-radius:4px; color:var(--muted); }
+  .upload-loaded-name { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--good); margin-top:10px; }
+  .file-input { display:none; }
+  /* Replace File hover overlay */
+  .upload-replace {
+    display: none; position: absolute; inset: 0; border-radius: 14px;
+    background: rgba(14,14,18,0.88); align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 0.04em;
+    pointer-events: none;
+  }
+  .upload-box.loaded:hover .upload-replace { display: flex; }
+  .run-btn { padding:14px 40px; background:var(--accent); color:#fff; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; letter-spacing:0.04em; border:none; border-radius:12px; cursor:pointer; transition:all 0.2s; opacity:0.4; pointer-events:none; }
+  .run-btn.ready { opacity:1; pointer-events:all; }
+  .run-btn.ready:hover { background:#4f52d8; transform:translateY(-1px); box-shadow:0 8px 24px rgba(99,102,241,0.3); }
+  .clear-btn { padding:14px 32px; background:transparent; color:var(--muted); font-family:'Inter',sans-serif; font-size:13px; font-weight:700; letter-spacing:0.06em; border:1px solid var(--border); border-radius:10px; cursor:pointer; transition:all 0.2s; }
+  .clear-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+  .btn-row { display:flex; gap:12px; align-items:center; }
+
+  /* LOADING */
+  #loading { display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:80px; }
+  .spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-text { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); }
+
+  .panel { display:none; }
+  .panel.active { display:block; }
+
+  /* SECTION */
+  .section-header { display:flex; align-items:baseline; gap:12px; margin-bottom:20px; }
+  .section-title { font-size:18px; font-weight:800; letter-spacing:-0.02em; }
+  .section-badge { font-family:'JetBrains Mono',monospace; font-size:10px; padding:3px 8px; background:var(--surface2); border-radius:4px; color:var(--muted); }
+
+  /* OVERVIEW TABLE */
+  .overview-block { margin-bottom:28px; }
+  .overview-block-title { font-size:11px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent); text-align:left; padding:11px 16px; background:var(--surface2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px 8px 0 0; margin-bottom:0; }
+  .overview-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .overview-table th { background:var(--surface2); padding:9px 12px; text-align:left; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); border:1px solid var(--border); white-space:nowrap; }
+  .overview-table td { padding:9px 12px; border:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:12px; white-space:nowrap; background:var(--surface); }
+  .overview-table td.placement-col { font-weight:700; color:var(--text); background:var(--surface); }
+  .overview-table tr:hover td { background:var(--surface2); }
+
+  /* CTR coloring */
+  .ctr-high { background:#1a2d27 !important; color:var(--good); font-weight:700; }
+  .ctr-mid  { background:#2d2418 !important; color:var(--warn); font-weight:700; }
+  .ctr-low  { background:#2d1a20 !important; color:var(--bad);  font-weight:700; }
+  /* CVR coloring */
+  .cvr-high { background:#1a2d27 !important; color:var(--good); font-weight:700; }
+  .cvr-mid  { background:#2d2418 !important; color:var(--warn); font-weight:700; }
+  .cvr-low  { background:#2d1a20 !important; color:var(--bad);  font-weight:700; }
+  /* ACoS coloring */
+  .acos-good { color:var(--good); font-weight:700; }
+  .acos-warn { color:var(--warn); font-weight:700; }
+  .acos-bad  { color:var(--bad);  font-weight:700; }
+
+  /* Overview layout */
+  .overview-grid { display:flex; flex-direction:column; gap:24px; }
+
+  /* SUMMARY CARDS */
+  .summary-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:28px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .stat-label { font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .stat-value { font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:500; color:var(--text); }
+  .stat-sub { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); margin-top:3px; }
+
+  /* DATA TABLE */
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:24px; position:relative; }
+  .table-wrap > div { max-height:68vh; overflow-y:auto; }
+  .table-header-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border); }
+  .table-title { font-size:12px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; }
+  .table-count { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); }
+  .data-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .data-table th { background:var(--surface2); padding:10px 14px; text-align:left; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; position:sticky; top:0; z-index:10; }
+  .data-table th:hover { color:var(--text); }
+  .data-table th.sort-asc::after { content:' ↑'; color:var(--accent); }
+  .data-table th.sort-desc::after { content:' ↓'; color:var(--accent); }
+  .data-table td { padding:9px 14px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text); white-space:nowrap; }
+  .campaign-cell { white-space:normal !important; word-break:break-word; min-width:200px; max-width:400px; line-height:1.45; }
+  .data-table tr:last-child td { border-bottom:none; }
+  .data-table tr:hover td { background:var(--surface2); }
+
+  .placement-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:0.06em; }
+  .badge-top  { background:rgba(91,106,240,0.15); color:var(--top); }
+  .badge-rest { background:rgba(155,106,240,0.15); color:var(--rest); }
+  .badge-prod { background:rgba(107,115,148,0.15); color:var(--prod); }
+  .badge-off  { background:rgba(245,158,11,0.15); color:var(--accent4); }
+
+  /* FILTERS */
+  .filters-bar { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center; }
+  .filter-select { background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:'Inter',sans-serif; font-size:12px; font-weight:600; padding:8px 12px; border-radius:8px; cursor:pointer; outline:none; transition:border-color 0.2s; min-width:160px; }
+  .filter-select:focus { border-color:var(--accent); }
+  .filter-label { font-size:11px; color:var(--muted); font-weight:600; }
+  .search-input { background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:12px; padding:8px 12px; border-radius:8px; outline:none; width:240px; transition:border-color 0.2s; }
+  .search-input:focus { border-color:var(--accent); }
+  .search-input::placeholder { color:var(--muted); }
+
+  /* NOTES */
+  .notes-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
+  .notes-title { font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin-bottom:16px; }
+  .keyword-tags { display:flex; flex-wrap:wrap; gap:8px; }
+  .keyword-tag { font-family:'JetBrains Mono',monospace; font-size:12px; padding:5px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--accent); }
+  .empty-state { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; }
+
+  /* Mini summary cards above campaign tables */
+  .mini-cards-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .mini-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; min-width:120px; flex:1; }
+  .mini-card-label { font-size:9px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .mini-card-value { font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:500; color:var(--text); }
+  .mini-card.alert-card .mini-card-value { font-size:15px; }
+  .mini-card.wasted-card { border-color:rgba(255,204,0,0.25); }
+  .mini-card.wasted-card .mini-card-value { color:#ffcc00; }
+  .mini-card.bleeder-card { border-color:rgba(255,59,48,0.25); }
+  .mini-card.bleeder-card .mini-card-value { color:#ff3b30; }
+
+  /* Rich empty state */
+  .empty-state-rich { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:56px 20px; color:var(--muted); gap:10px; }
+  .empty-state-rich .empty-icon { font-size:28px; opacity:0.7; }
+  .empty-state-rich .empty-msg { font-size:13px; line-height:1.5; text-align:center; }
+
+  /* Scale rocket badge */
+  .rocket-badge { display:inline-flex; align-items:center; background:rgba(234,179,8,0.15); color:#fde047; padding:2px 7px; border-radius:4px; font-size:10px; margin-left:6px; font-weight:700; letter-spacing:0.05em; }
+
+  /* Alert badges */
+  .alert-badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:0.04em; white-space:nowrap; }
+  .alert-wasted  { background:rgba(255,204,0,0.12); color:#ffcc00; border:1px solid rgba(255,204,0,0.35); }
+  .alert-bleeder { background:rgba(255,59,48,0.12);  color:#ff3b30; border:1px solid rgba(255,59,48,0.35); }
+  .alert-flag    { font-size:10px; color:#ff3b30; font-weight:700; opacity:0.85; white-space:nowrap; }
+
+  /* Accordion / campaign group header */
+  .campaign-group-header { background:var(--surface2) !important; cursor:pointer; }
+  .campaign-group-header td { color:var(--text) !important; font-weight:700; }
+  .campaign-group-header:hover td { filter:brightness(1.12); }
+  .hidden-row { display:none !important; }
+  .child-row td { padding-left:28px !important; color:var(--muted) !important; font-size:10.5px; }
+
+  /* Overview totals row */
+  .overview-total-row td { background:var(--surface2) !important; font-weight:700; color:var(--text) !important; border-top:2px solid var(--border); }
+  .overview-total-row td.placement-col { color:var(--muted) !important; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; }
+
+  /* Export button */
+  .export-btn { padding:8px 14px; background:transparent; color:var(--muted); font-family:'Inter',sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .export-btn:hover { border-color:var(--accent3); color:var(--accent3); }
+
+  /* Toggle view button */
+  .toggle-view-btn { padding:8px 16px; background:var(--surface2); color:var(--muted); font-family:'Inter',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.08em; border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .toggle-view-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .toggle-view-btn.active { background:rgba(91,106,240,0.15); border-color:var(--accent); color:var(--accent); }
+
+  /* ── Hero / info section ── */
+  .hero { max-width:680px; margin:56px auto 0; text-align:center; }
+  .hero-headline {
+    font-size:20px; font-weight:800; letter-spacing:-0.01em; color:var(--text);
+    margin-bottom:16px; line-height:1.3;
+  }
+  .hero-headline em {
+    font-style:normal;
+    background:linear-gradient(90deg,var(--accent),var(--rest));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    background-clip:text;
+  }
+  .hero-body {
+    font-size:13px; color:var(--muted); line-height:1.75; margin-bottom:24px;
+  }
+  .hero-card {
+    display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:0; text-align:left;
+  }
+  .hero-col {
+    background:rgba(255,255,255,0.02); backdrop-filter:blur(6px);
+    border:1px solid var(--border); border-radius:10px; padding:16px 18px;
+  }
+  .hero-col-title {
+    font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:10px;
+  }
+  .hero-col ul { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:7px; }
+  .hero-col ul li {
+    font-size:12px; color:var(--muted); padding-left:14px; position:relative; line-height:1.4;
+  }
+  .hero-col ul li::before {
+    content:''; position:absolute; left:0; top:6px;
+    width:5px; height:5px; border-radius:50%;
+    background:var(--accent); opacity:0.6;
+  }
+  .hero-col ul li strong { color:var(--text); font-weight:600; }
+  .hero-divider {
+    width:32px; height:2px; background:linear-gradient(90deg,var(--accent),var(--rest));
+    border-radius:2px; margin:20px auto 0;
+  }
+  .hero-trust {
+    margin-top:16px; font-size:10px; color:var(--muted); opacity:0.55;
+    letter-spacing:0.04em; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .hero-trust::before {
+    content:'🔒'; font-size:9px; opacity:0.7;
+  }
+
+  @media (max-width:768px) {
+    .main { padding:16px; }
+    header { padding:14px 16px; }
+    .tabs { padding:0 16px; }
+    .search-input { width:100%; }
+    .hero { margin-top:28px; }
+    .hero-headline { font-size:17px; }
+    .hero-card { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Placement <span>Analysis</span><div class="logo-sub">by J. van Gestel</div></div>
+  <div class="header-status" id="header-status">No file loaded</div>
+</header>
+
+<div class="tabs" id="tabs" style="display:none">
+  <div class="tab active" data-tab="sp-overview">SP Overview</div>
+  <div class="tab" data-tab="sp-campaigns">SP Campaigns</div>
+  <div class="tab" data-tab="sb-overview">SB Overview</div>
+  <div class="tab" data-tab="sb-campaigns">SB Campaigns</div>
+  <div class="tab" data-tab="notes">Notes</div>
+</div>
+
+<div class="main">
+
+  <!-- UPLOAD -->
+  <div id="upload-section">
+    <div style="text-align:center;margin-bottom:8px">
+      <div style="font-size:22px;font-weight:800;margin-bottom:6px">Upload Your Reports</div>
+      <div style="font-size:13px;color:var(--muted)">Upload one or both files. Your data stays in your browser.</div>
+    </div>
+    <div class="upload-row">
+      <!-- SP Upload -->
+      <div class="upload-box" id="sp-drop-zone">
+        <div class="upload-icon">📦</div>
+        <div class="upload-title">SP Placement Report</div>
+        <div class="upload-sub">Sponsored Products placement data<br>(.xlsx or .xlsm)</div>
+        <div class="upload-tag">Required for SP Overview</div>
+        <div class="upload-loaded-name" id="sp-loaded-name" style="display:none"></div>
+        <input type="file" class="file-input" id="sp-file-input" accept=".xlsx,.xlsm">
+        <div class="upload-replace">↩ Replace File</div>
+      </div>
+      <!-- SB Upload -->
+      <div class="upload-box" id="sb-drop-zone">
+        <div class="upload-icon">🎯</div>
+        <div class="upload-title">SB Placement Report</div>
+        <div class="upload-sub">Sponsored Brands placement data<br>(.xlsx or .xlsm)</div>
+        <div class="upload-tag">Required for SB Overview</div>
+        <div class="upload-loaded-name" id="sb-loaded-name" style="display:none"></div>
+        <input type="file" class="file-input" id="sb-file-input" accept=".xlsx,.xlsm">
+        <div class="upload-replace">↩ Replace File</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="run-btn" id="run-btn">Analyze Reports</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center">
+      Upload SP only, SB only, or both. If your file contains both SP &amp; SB sheets, uploading it to <em>either</em> box is enough — both will be detected automatically.
+    </div>
+
+    <!-- Hero / info section -->
+    <div class="hero">
+      <h2 class="hero-headline">Smarter <em>Placement Optimization</em> Starts Here</h2>
+      <p class="hero-body">
+        Placement Analysis transforms raw Amazon Ads placement reports into a streamlined
+        performance dashboard built for faster decision-making. Designed for Amazon advertisers,
+        media buyers, and account managers — helping you understand how each placement contributes
+        to overall advertising performance across Sponsored Products and Sponsored Brands campaigns.
+      </p>
+      <div class="hero-card">
+        <div class="hero-col">
+          <div class="hero-col-title">Compare performance across</div>
+          <ul>
+            <li><strong>Top of Search</strong></li>
+            <li><strong>Rest of Search</strong></li>
+            <li><strong>Product Pages</strong></li>
+          </ul>
+        </div>
+        <div class="hero-col">
+          <div class="hero-col-title">Instantly identify</div>
+          <ul>
+            <li>High-performing placements <strong>worth scaling</strong></li>
+            <li>Placements <strong>draining budget</strong> with no return</li>
+            <li>Inefficient spend flagged <strong>automatically</strong></li>
+            <li>Opportunities <strong>hidden in placement data</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-trust">Reports are processed locally in your browser. No data is uploaded or stored.</div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" style="display:none;flex-direction:column;align-items:center;padding:80px;gap:16px;">
+    <div class="spinner"></div>
+    <div class="loading-text">Processing your data…</div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" style="display:none">
+
+    <!-- SP OVERVIEW -->
+    <div class="panel active" id="panel-sp-overview">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div class="section-header" style="margin-bottom:0">
+          <div class="section-title">SP Overview</div>
+          <div class="section-badge" id="sp-overview-badge">–</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="export-btn" onclick="exportSPOverview()">↓ Excel</button>
+          <button class="clear-btn" id="reset-btn" style="font-size:12px;padding:8px 18px">↩ Upload New Files</button>
+        </div>
+      </div>
+      <div class="filters-bar" style="margin-bottom:20px">
+        <span class="filter-label">Filter:</span>
+        <select class="filter-select" id="sp-ov-portfolio-filter"><option value="">All Portfolios</option></select>
+        <input class="search-input" id="sp-ov-search" type="text" placeholder="Search campaign…">
+      </div>
+      <div id="sp-overview-tables"></div>
+    </div>
+
+    <!-- SB OVERVIEW -->
+    <div class="panel" id="panel-sb-overview">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div class="section-header" style="margin-bottom:0">
+          <div class="section-title">SB Overview</div>
+          <div class="section-badge" id="sb-overview-badge">–</div>
+        </div>
+        <button class="export-btn" onclick="exportSBOverview()">↓ Excel</button>
+      </div>
+      <div class="filters-bar" style="margin-bottom:20px">
+        <span class="filter-label">Filter:</span>
+        <select class="filter-select" id="sb-ov-portfolio-filter"><option value="">All Portfolios</option></select>
+        <input class="search-input" id="sb-ov-search" type="text" placeholder="Search campaign…">
+      </div>
+      <div id="sb-overview-tables"></div>
+    </div>
+
+    <!-- SP CAMPAIGNS -->
+    <div class="panel" id="panel-sp-campaigns">
+      <div class="section-header"><div class="section-title">SP Campaigns</div></div>
+      <div class="filters-bar">
+        <span class="filter-label">Filter:</span>
+        <select class="filter-select" id="sp-portfolio-filter"><option value="">All Portfolios</option></select>
+        <select class="filter-select" id="sp-match-filter">
+          <option value="">All Match Types</option>
+          <option value="Auto">Auto</option>
+          <option value="Exact">Exact</option>
+          <option value="Phrase">Phrase</option>
+          <option value="Broad">Broad</option>
+          <option value="ASIN/PT">ASIN / PT</option>
+          <option value="Category">Category</option>
+        </select>
+        <select class="filter-select" id="sp-placement-filter">
+          <option value="">All Placements</option>
+          <option value="Top">Top of Search</option>
+          <option value="Rest">Rest of Search</option>
+          <option value="Product">Product Pages</option>
+          <option value="off">Off Amazon</option>
+        </select>
+        <input class="search-input" id="sp-search" type="text" placeholder="Search campaign…">
+        <button class="toggle-view-btn" id="sp-toggle-view-btn" onclick="toggleSPView()">⊞ Flat Rows</button>
+      </div>
+      <div id="sp-summary-cards"></div>
+      <div class="table-wrap">
+        <div class="table-header-bar">
+          <div class="table-title">SP Placement Data</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="table-count" id="sp-count">0 rows</div>
+            <button class="export-btn" onclick="exportSPCampaigns()">↓ Excel</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="sp-table">
+            <thead><tr>
+              <th data-col="placement">Placement</th>
+              <th data-col="campaign">Campaign</th>
+              <th data-col="matchType">Match</th>
+              <th data-col="impressions">Impressions</th>
+              <th data-col="clicks">Clicks</th>
+              <th data-col="ctr">CTR</th>
+              <th data-col="spend">Spend</th>
+              <th data-col="sales">Sales</th>
+              <th data-col="cvr">CVR</th>
+              <th data-col="acos">ACoS</th>
+              <th data-col="roas">ROAS</th>
+              <th data-col="orders">Orders</th>
+              <th>Alert</th>
+            </tr></thead>
+            <tbody id="sp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SB CAMPAIGNS -->
+    <div class="panel" id="panel-sb-campaigns">
+      <div class="section-header"><div class="section-title">SB Campaigns</div></div>
+      <div class="filters-bar">
+        <span class="filter-label">Filter:</span>
+        <select class="filter-select" id="sb-portfolio-filter"><option value="">All Portfolios</option></select>
+        <select class="filter-select" id="sb-type-filter">
+          <option value="">All Types</option>
+          <option value="SBV">SBV (Video)</option>
+          <option value="SB">SB (Headline)</option>
+        </select>
+        <select class="filter-select" id="sb-placement-filter2">
+          <option value="">All Placements</option>
+          <option value="Top">Top of Search</option>
+          <option value="Rest">Rest of Search</option>
+          <option value="Product">Product Pages</option>
+        </select>
+        <input class="search-input" id="sb-search" type="text" placeholder="Search campaign…">
+        <button class="toggle-view-btn" id="sb-toggle-view-btn" onclick="toggleSBView()">⊞ Flat Rows</button>
+      </div>
+      <div id="sb-summary-cards"></div>
+      <div class="table-wrap">
+        <div class="table-header-bar">
+          <div class="table-title">SB Placement Data</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="table-count" id="sb-count">0 rows</div>
+            <button class="export-btn" onclick="exportSBCampaigns()">↓ Excel</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="sb-table">
+            <thead><tr>
+              <th data-col="placement">Placement</th>
+              <th data-col="campaign">Campaign</th>
+              <th data-col="type">Type</th>
+              <th data-col="impressions">Impressions</th>
+              <th data-col="clicks">Clicks</th>
+              <th data-col="ctr">CTR</th>
+              <th data-col="spend">Spend</th>
+              <th data-col="sales">Sales</th>
+              <th data-col="cvr">CVR</th>
+              <th data-col="acos">ACoS</th>
+              <th data-col="roas">ROAS</th>
+              <th data-col="orders">Orders</th>
+              <th>Alert</th>
+            </tr></thead>
+            <tbody id="sb-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTES -->
+    <div class="panel" id="panel-notes">
+      <div class="section-header"><div class="section-title">Notes & Configuration</div></div>
+      <div class="notes-card">
+        <div class="notes-title">Match Type Keywords</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">Campaigns are classified by match type based on these keywords in their names (case-insensitive):</p>
+        <div class="keyword-tags">
+          <span class="keyword-tag">Auto</span><span class="keyword-tag">Exact</span><span class="keyword-tag">Phrase</span>
+          <span class="keyword-tag">Broad</span><span class="keyword-tag">ASIN / PT</span><span class="keyword-tag">CAT / Category</span>
+        </div>
+      </div>
+      <div class="notes-card">
+        <div class="notes-title">Colour Coding</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.8">
+          <strong style="color:var(--good)">CTR/CVR Green</strong> — High performance &nbsp;|&nbsp;
+          <strong style="color:var(--warn)">Yellow</strong> — Average &nbsp;|&nbsp;
+          <strong style="color:var(--bad)">Red</strong> — Low performance<br>
+          <strong style="color:var(--good)">ACoS Green</strong> — Below 30% &nbsp;|&nbsp;
+          <strong style="color:var(--warn)">Yellow</strong> — 30–50% &nbsp;|&nbsp;
+          <strong style="color:var(--bad)">Red</strong> — Above 50%
+        </p>
+      </div>
+      <div class="notes-card">
+        <div class="notes-title">🚀 Scale Badge</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6">
+          Rows with <strong style="color:#fde047">ACoS ≤ 12%</strong> and <strong style="color:#fde047">≥ 2 orders</strong> are flagged with a 🚀 Scale badge — a signal to consider increasing bids or budget on that placement.
+        </p>
+      </div>
+      <div class="notes-card">
+        <div class="notes-title">🚨 Alert System — Bleeder &amp; Wasted Spend</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:14px">
+          Alerts appear in the <strong style="color:var(--text)">Alert</strong> column of SP and SB Campaigns tabs and are evaluated at placement level independently per row.
+          Only one alert fires per row — <strong style="color:#ffcc00">Wasted Spend</strong> always overrides <strong style="color:#ff3b30">Bleeder</strong>.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <span class="alert-badge alert-wasted" style="flex-shrink:0;margin-top:2px">🛑 Wasted Spend</span>
+            <span style="font-size:12px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)">CRITICAL</strong> — Spend ≥ 25 and zero orders. Pure budget waste with no conversions. Consider pausing the placement or reducing bids aggressively.</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <span class="alert-badge alert-bleeder" style="flex-shrink:0;margin-top:2px">🚨 Bleeder</span>
+            <span style="font-size:12px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)">HIGH</strong> — Spend ≥ 15, orders ≤ 1, and ACoS ≥ 60%. Spend is active but return is poor — review bid strategy or negate the placement.</span>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:12px;line-height:1.6;border-top:1px solid var(--border);padding-top:10px">
+          <strong style="color:var(--text)">False-positive guard:</strong> Rows with fewer than 1,000 impressions are only evaluated if spend ≥ 50, preventing alerts on sparse / low-traffic data.
+          In Aggregated view the group header shows a flagged-placement count; expand the row to see which placements triggered the alert.
+        </p>
+      </div>
+      <div class="notes-card">
+        <div class="notes-title">⊞ / ⊟ Aggregated View (SP Campaigns)</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6">
+          Toggle between <strong style="color:var(--text)">Flat Rows</strong> (one row per placement) and <strong style="color:var(--text)">Aggregated</strong> (campaigns collapsed into a single summary row). Click <strong style="color:var(--accent)">▶ Expand</strong> on any campaign row to reveal its individual placement breakdown.
+        </p>
+      </div>
+      <div class="notes-card">
+        <div class="notes-title">Two-File Upload</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6">
+          Upload the <strong style="color:var(--text)">SP Placement Report</strong> and <strong style="color:var(--text)">SB Placement Report</strong> separately.
+          You can upload one or both. Click <strong style="color:var(--text)">↩ Upload New Files</strong> from the Overview tab to go back and load different files.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+// Fallback: if jsdelivr failed to load XLSX, try cdnjs
+if (typeof XLSX === 'undefined') {
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  document.head.appendChild(s);
+}
+</script>
+<script>
+// ============================================================
+// UTILITIES
+// ============================================================
+function escHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let G = {
+  spRows: [], sbRows: [],
+  spCurrency: '', sbCurrency: '', sbDiag: '',
+  spFile: null, sbFile: null,
+};
+let spSort = { col: null, dir: -1 };
+let sbSort = { col: null, dir: -1 };
+let spView = 'flat'; // 'flat' | 'aggregated'
+let sbView = 'flat'; // 'flat' | 'aggregated'
+
+// ============================================================
+// UPLOAD UI
+// ============================================================
+function setupUpload(dropId, inputId, type) {
+  const drop = document.getElementById(dropId);
+  const inp  = document.getElementById(inputId);
+  drop.addEventListener('click', () => inp.click());
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('drag');
+    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0], type);
+  });
+  inp.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0], type); });
+}
+
+function setFile(file, type) {
+  G[type + 'File'] = file;
+  const nameEl = document.getElementById(type + '-loaded-name');
+  nameEl.textContent = '✓ ' + file.name;
+  nameEl.style.display = 'block';
+  document.getElementById(type + '-drop-zone').classList.add('loaded');
+  checkRunReady();
+}
+
+function checkRunReady() {
+  const ready = G.spFile || G.sbFile;
+  const btn = document.getElementById('run-btn');
+  btn.classList.toggle('ready', !!ready);
+}
+
+setupUpload('sp-drop-zone', 'sp-file-input', 'sp');
+setupUpload('sb-drop-zone', 'sb-file-input', 'sb');
+
+document.getElementById('run-btn').addEventListener('click', () => {
+  if (!G.spFile && !G.sbFile) return;
+  document.getElementById('upload-section').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+  Promise.all([
+    G.spFile ? readFile(G.spFile) : Promise.resolve(null),
+    G.sbFile ? readFile(G.sbFile) : Promise.resolve(null),
+  ]).then(([spWb, sbWb]) => {
+    // Collect unique workbooks (same file may be dropped in both slots)
+    const workbooks = [spWb, sbWb].filter(Boolean);
+    const seen = new Set();
+    for (const wb of workbooks) {
+      if (seen.has(wb)) continue;
+      seen.add(wb);
+      const r = processWorkbook(wb);
+      G.spRows.push(...r.spRows);
+      G.sbRows.push(...r.sbRows);
+      if (r.spCurrency && !G.spCurrency) G.spCurrency = r.spCurrency;
+      if (r.sbCurrency && !G.sbCurrency) G.sbCurrency = r.sbCurrency;
+      if (r.diag.length) G.sbDiag += r.diag.join(' | ');
+    }
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('tabs').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'block';
+    const parts = [];
+    if (G.spRows.length) parts.push(G.spRows.length + ' SP rows');
+    if (G.sbRows.length) parts.push(G.sbRows.length + ' SB rows');
+    document.getElementById('header-status').textContent = parts.join(' · ') + ' loaded';
+    renderAll();
+  }).catch(err => {
+    alert('Error: ' + err.message);
+    resetToUpload();
+  });
+});
+
+document.getElementById('reset-btn').addEventListener('click', resetToUpload);
+
+function resetToUpload() {
+  G = { spRows:[], sbRows:[], spCurrency:'', sbCurrency:'', sbDiag:'', spFile:null, sbFile:null };
+  spSort = { col: null, dir: -1 };
+  sbSort = { col: null, dir: -1 };
+  spView = 'flat'; sbView = 'flat';
+  const spBtn = document.getElementById('sp-toggle-view-btn');
+  if (spBtn) { spBtn.textContent = '⊞ Flat Rows'; spBtn.classList.remove('active'); }
+  const sbBtn = document.getElementById('sb-toggle-view-btn');
+  if (sbBtn) { sbBtn.textContent = '⊞ Flat Rows'; sbBtn.classList.remove('active'); }
+  ['sp','sb'].forEach(t => {
+    document.getElementById(t+'-loaded-name').style.display = 'none';
+    document.getElementById(t+'-drop-zone').classList.remove('loaded');
+    document.getElementById(t+'-file-input').value = '';
+  });
+  document.getElementById('run-btn').classList.remove('ready');
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('upload-section').style.display = 'flex';
+  document.getElementById('header-status').textContent = 'No file loaded';
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const firstPanel = document.getElementById('panel-sp-overview');
+  if (firstPanel) firstPanel.classList.add('active');
+}
+
+function readFile(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try { res(XLSX.read(new Uint8Array(e.target.result), { type:'array' })); }
+      catch(err) { rej(err); }
+    };
+    reader.onerror = () => rej(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ============================================================
+// WORKBOOK PROCESSING — unified flexible parser
+// ============================================================
+
+// Trim, lowercase, collapse whitespace
+function normalizeHeader(h) {
+  return String(h || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Treat "14-day" / "7-day" as identical to "14 day" / "7 day"
+function normAttr(h) {
+  return normalizeHeader(h).replace(/(\d+)-day/gi, '$1 day');
+}
+
+// All column alias lists — ordered most-specific to least-specific
+const COLUMN_ALIASES = {
+  campaign:    ['campaign name', 'campaign'],
+  placement:   ['placement'],
+  portfolio:   ['portfolio name', 'portfolio'],
+  currency:    ['currency'],
+  costType:    ['cost type'],
+  impressions: ['impressions'],
+  clicks:      ['clicks', 'total clicks'],
+  spend:       ['spend'],
+  sales: [
+    '14 day total sales ($)',  '14-day total sales ($)',
+    '7 day total sales ($)',   '7-day total sales ($)',
+    '14 day total sales',      '14-day total sales',
+    '7 day total sales',       '7-day total sales',
+    'sales', 'revenue',
+  ],
+  orders: [
+    '14 day total orders (#)', '14-day total orders (#)',
+    '7 day total orders (#)',  '7-day total orders (#)',
+    '14 day total orders',     '14-day total orders',
+    '7 day total orders',      '7-day total orders',
+    'orders', 'total orders',
+  ],
+  units: [
+    '14 day total units (#)',  '14-day total units (#)',
+    '7 day total units (#)',   '7-day total units (#)',
+    '14 day total units',      '14-day total units',
+    '7 day total units',       '7-day total units',
+    'units',
+  ],
+  cpc:     ['cost per click (cpc)', 'cost per click', 'cpc'],
+  acos:    ['advertising cost of sales (acos)', 'total advertising cost of sales (acos)', 'acos'],
+  roas:    ['return on advertising spend (roas)', 'total return on advertising spend (roas)', 'roas'],
+  bidding: ['bidding strategy', 'bidding'],
+};
+
+// Return the 0-based index of the first matching alias, or -1
+function findCol(normHdr, ...aliases) {
+  for (const alias of aliases) {
+    const idx = normHdr.findIndex(h => normAttr(h) === normAttr(alias));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+// Build a complete { fieldName → columnIndex } map from a normalised header row
+function buildColMap(normHdr) {
+  const map = {};
+  for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+    map[field] = findCol(normHdr, ...aliases);
+  }
+  return map;
+}
+
+// ============================================================
+// SHEET TYPE DETECTION
+// Returns 'SP', 'SB', or null (not a placement report)
+// ============================================================
+function detectSheetType(ws, sheetName) {
+  const name = normalizeHeader(sheetName).replace(/_/g, ' ');
+
+  // Sheet-name keyword signals
+  const nameIsSB = /sponsored brand|\bsbv?\b/.test(name) && !/sponsored product/.test(name);
+  const nameIsSP = /sponsored product|\bsp\b|placement report/.test(name) && !/sponsored brand/.test(name);
+
+  // Scan first few rows to locate the header row
+  let preview;
+  try { preview = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }); }
+  catch(e) { return null; }
+  if (!preview || preview.length < 2) return null;
+
+  let hdrRow = null;
+  for (let i = 0; i < Math.min(6, preview.length); i++) {
+    const norm = preview[i].map(h => normalizeHeader(String(h)));
+    const hasCampaign  = norm.some(h => h.includes('campaign'));
+    const hasPlacement = norm.some(h => h === 'placement');
+    if (hasCampaign && hasPlacement) { hdrRow = norm; break; }
+  }
+  // No recognisable header → not a placement report
+  if (!hdrRow) return null;
+
+  // Check the five required fields
+  const ok = ['impressions', 'clicks', 'spend'].every(req =>
+    hdrRow.some(h => h === req || h.includes(req))
+  );
+  if (!ok) return null;
+
+  // SB signature columns (cost type = CPC/VCPM, viewable impressions)
+  const hasSBCol = hdrRow.some(h => h === 'cost type' || h.includes('viewable'));
+
+  if (nameIsSB || hasSBCol) return 'SB';
+  if (nameIsSP)              return 'SP';
+  // Ambiguous name → default SP
+  return 'SP';
+}
+
+// ============================================================
+// UNIFIED SHEET PROCESSOR
+// type: 'SP' | 'SB'
+// Returns { rows, currency }
+// ============================================================
+function processSheetRows(ws, type) {
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  if (raw.length < 2) return { rows: [], currency: '' };
+
+  // Find the actual header row (handles a few blank rows at top)
+  let hdrIdx = 0;
+  for (let i = 0; i < Math.min(6, raw.length); i++) {
+    const norm = raw[i].map(h => normalizeHeader(String(h)));
+    if (norm.some(h => h.includes('campaign')) && norm.some(h => h === 'placement')) {
+      hdrIdx = i; break;
+    }
+  }
+
+  const normHdr = raw[hdrIdx].map(h => normalizeHeader(String(h)));
+  const CI = buildColMap(normHdr);
+
+  // Detect currency from data rows
+  let currency = '';
+  if (CI.currency >= 0) {
+    for (let i = hdrIdx + 1; i < raw.length && !currency; i++) {
+      const c = String(raw[i][CI.currency] || '');
+      if (/^[A-Z]{2,4}$/.test(c)) currency = c;
+    }
+  }
+
+  const rows = [];
+  for (let i = hdrIdx + 1; i < raw.length; i++) {
+    const row = raw[i];
+
+    const campaign     = CI.campaign    >= 0 ? String(row[CI.campaign]    || '').trim() : '';
+    const placementRaw = CI.placement   >= 0 ? String(row[CI.placement]   || '').trim() : '';
+
+    // Skip blank rows and header-repeat rows
+    if (!campaign || !placementRaw) continue;
+    if (/^campaign(\s+name)?$/i.test(campaign) || /^placement$/i.test(placementRaw)) continue;
+
+    const portfolio   = CI.portfolio   >= 0 ? String(row[CI.portfolio]   || '') : '';
+    const impressions = CI.impressions >= 0 ? toInt(row[CI.impressions])         : 0;
+    const clicks      = CI.clicks      >= 0 ? toInt(row[CI.clicks])              : 0;
+    const spend       = CI.spend       >= 0 ? toFloat(row[CI.spend])             : 0;
+    const sales       = CI.sales       >= 0 ? toFloat(row[CI.sales])             : 0;
+    const orders      = CI.orders      >= 0 ? toInt(row[CI.orders])              : 0;
+    const units       = CI.units       >= 0 ? toInt(row[CI.units])               : 0;
+    const cpc         = CI.cpc         >= 0 ? toFloat(row[CI.cpc])
+                                            : (clicks > 0 ? spend / clicks : 0);
+    const placement   = normalizePlacement(placementRaw);
+
+    const acos = sales  > 0 ? spend  / sales  : null;
+    const roas = spend  > 0 ? sales  / spend  : null;
+    const ctr  = impressions > 0 ? clicks / impressions : 0;
+    const cvr  = clicks > 0 ? orders / clicks : 0;
+
+    const base = {
+      campaign, placement: placement || placementRaw, portfolio,
+      impressions, clicks, spend, sales, orders, units, cpc,
+      acos, roas, ctr, cvr,
+    };
+
+    if (type === 'SP') {
+      const bidding = CI.bidding >= 0 ? String(row[CI.bidding] || '') : '';
+      rows.push({ ...base, bidding, matchType: detectMatchType(campaign) });
+    } else {
+      const costType = CI.costType >= 0 ? String(row[CI.costType] || '') : '';
+      const sbType   = campaign.toUpperCase().includes('SBV') ? 'SBV' : 'SB';
+      rows.push({ ...base, costType, type: sbType });
+    }
+  }
+
+  return { rows, currency };
+}
+
+// ============================================================
+// WORKBOOK PROCESSOR — scans every sheet, loads all valid placement sheets
+// ============================================================
+function processWorkbook(wb) {
+  const result = { spRows: [], sbRows: [], spCurrency: '', sbCurrency: '', diag: [] };
+
+  for (const sheetName of wb.SheetNames) {
+    const ws   = wb.Sheets[sheetName];
+    const type = detectSheetType(ws, sheetName);
+    if (!type) continue;
+
+    const { rows, currency } = processSheetRows(ws, type);
+    result.diag.push(`"${sheetName}" → ${type} (${rows.length} rows)`);
+    if (!rows.length) continue;
+
+    if (type === 'SP') {
+      result.spRows.push(...rows);
+      if (currency && !result.spCurrency) result.spCurrency = currency;
+    } else {
+      result.sbRows.push(...rows);
+      if (currency && !result.sbCurrency) result.sbCurrency = currency;
+    }
+  }
+
+  return result;
+}
+
+function toFloat(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function toInt(v)   { const n = parseInt(v);   return isNaN(n) ? 0 : n; }
+
+function detectMatchType(name) {
+  const n = name.toLowerCase();
+  if (n.includes('auto')) return 'Auto';
+  if (n.includes('exact')) return 'Exact';
+  if (n.includes('phrase')) return 'Phrase';
+  if (n.includes('broad')) return 'Broad';
+  if (n.includes('asin') || n.includes(' pt ') || n.includes('-pt-') || n.includes('product targeting')) return 'ASIN/PT';
+  if (n.includes('cat') || n.includes('category')) return 'Category';
+  return null; // null = unclassified, hidden from overview
+}
+
+function normalizePlacement(pl) {
+  if (!pl) return pl;
+  const l = pl.toLowerCase();
+  if (l.includes('top')) return 'Top of Search on Amazon';
+  if (l.includes('rest') || l.includes('other')) return 'Rest of search on Amazon';
+  if (l.includes('product') || l.includes('detail')) return 'Product pages on Amazon';
+  return pl;
+}
+
+function shortPlacement(pl) {
+  if (!pl) return pl;
+  const l = pl.toLowerCase();
+  if (l.includes('top')) return 'Top';
+  if (l.includes('rest') || l.includes('other')) return 'Rest';
+  if (l.includes('product') || l.includes('detail')) return 'Product';
+  if (l.includes('off')) return 'Off Amazon';
+  return pl;
+}
+
+// ============================================================
+// FORMATTERS
+// ============================================================
+function currSym(type) {
+  const c = type === 'sb' ? G.sbCurrency : G.spCurrency;
+  if (!c) return '$';
+  const map = { USD:'$', EUR:'€', GBP:'£', JPY:'¥', CAD:'CA$', AUD:'A$', MXN:'MX$', BRL:'R$', INR:'₹', SEK:'kr', NOK:'kr', DKK:'kr', PLN:'zł', CZK:'Kč', HUF:'Ft', CHF:'Fr', SGD:'S$', HKD:'HK$' };
+  return map[c.toUpperCase()] || c + ' ';
+}
+
+// FIX: show $0.00 for zero values instead of '–'
+function fmtCurr(n, type='sp') {
+  if (n == null || isNaN(n)) return '–';
+  return currSym(type) + Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtNum(n, d=0) { if (n==null||isNaN(n)) return '–'; return n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtPct(n)  { if (n==null||isNaN(n)) return '–'; return (n*100).toFixed(2)+'%'; }
+function fmtAcos(n) { if (n==null||isNaN(n)) return '–'; return (n*100).toFixed(2)+'%'; }
+function fmtRoas(n) { if (n==null||isNaN(n)||n===0) return '–'; return n.toFixed(2)+'x'; }
+
+function ctrClass(n) {
+  if (n==null) return '';
+  if (n >= 0.05) return 'ctr-high';
+  if (n >= 0.01) return 'ctr-mid';
+  return 'ctr-low';
+}
+function cvrClass(n) {
+  if (n==null) return '';
+  if (n >= 0.15) return 'cvr-high';
+  if (n >= 0.07) return 'cvr-mid';
+  return 'cvr-low';
+}
+function acosClass(n) {
+  if (n==null) return '';
+  if (n < 0.30) return 'acos-good';
+  if (n < 0.50) return 'acos-warn';
+  return 'acos-bad';
+}
+
+function placementBadge(pl) {
+  const s = shortPlacement(pl);
+  const cls = s==='Top' ? 'badge-top' : s==='Rest' ? 'badge-rest' : s==='Off Amazon' ? 'badge-off' : 'badge-prod';
+  return `<span class="placement-badge ${cls}">${escHtml(s||pl)}</span>`;
+}
+
+// ============================================================
+// PIVOT
+// ============================================================
+const PLACEMENT_ORDER = ['Top of Search on Amazon','Rest of search on Amazon','Product pages on Amazon'];
+const MATCH_TYPES = ['Auto','Exact','Phrase','Broad','ASIN/PT','Category'];
+
+function pivotByMatchAndPlacement(rows) {
+  const map = {};
+  for (const r of rows) {
+    if (!r.matchType) continue; // skip unclassified
+    const key = r.matchType + '||' + r.placement;
+    if (!map[key]) map[key] = { matchType:r.matchType, placement:r.placement, spend:0, sales:0, impressions:0, clicks:0, orders:0 };
+    const g = map[key];
+    g.spend += r.spend; g.sales += r.sales; g.impressions += r.impressions; g.clicks += r.clicks; g.orders += r.orders;
+  }
+  return Object.values(map).map(g => ({
+    ...g,
+    acos: g.sales>0 ? g.spend/g.sales : null,
+    roas: g.spend>0 ? g.sales/g.spend : null,
+    ctr:  g.impressions>0 ? g.clicks/g.impressions : 0,
+    cvr:  g.clicks>0 ? g.orders/g.clicks : 0,
+    cpc:  g.clicks>0 ? g.spend/g.clicks : 0,
+  }));
+}
+
+function pivotOverall(rows) {
+  // All rows (including unclassified) grouped by placement
+  const map = {};
+  for (const r of rows) {
+    const key = r.placement;
+    if (!map[key]) map[key] = { placement:r.placement, spend:0, sales:0, impressions:0, clicks:0, orders:0 };
+    const g = map[key];
+    g.spend += r.spend; g.sales += r.sales; g.impressions += r.impressions; g.clicks += r.clicks; g.orders += r.orders;
+  }
+  return Object.values(map).map(g => ({
+    ...g,
+    acos: g.sales>0 ? g.spend/g.sales : null,
+    roas: g.spend>0 ? g.sales/g.spend : null,
+    ctr:  g.impressions>0 ? g.clicks/g.impressions : 0,
+    cvr:  g.clicks>0 ? g.orders/g.clicks : 0,
+    cpc:  g.clicks>0 ? g.spend/g.clicks : 0,
+  }));
+}
+
+function sortPlacements(rows) {
+  return [...rows].sort((a,b) => {
+    const ai = PLACEMENT_ORDER.indexOf(a.placement);
+    const bi = PLACEMENT_ORDER.indexOf(b.placement);
+    return (ai===-1?99:ai) - (bi===-1?99:bi);
+  });
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll() {
+  renderSPOverview();
+  renderSBOverview();
+  renderSPTable();
+  renderSBTable();
+  populateSPPortfolioFilter();
+  populateSBPortfolioFilter();
+  populateSPOvPortfolioFilter();
+  populateSBOvPortfolioFilter();
+}
+
+// ============================================================
+// SP OVERVIEW TAB
+// ============================================================
+function renderSPOverview() {
+  const el = document.getElementById('sp-overview-tables');
+  if (!G.spRows.length) { el.innerHTML = '<div class="empty-state-rich"><div class="empty-icon">📭</div><div class="empty-msg">No SP data loaded.<br>Upload a Sponsored Products placement report to get started.</div></div>'; return; }
+
+  const portF   = (document.getElementById('sp-ov-portfolio-filter') || {}).value || '';
+  const searchF = ((document.getElementById('sp-ov-search') || {}).value || '').toLowerCase();
+
+  const filtered = G.spRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF) && !r.portfolio.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  document.getElementById('sp-overview-badge').textContent = filtered.length + ' rows';
+
+  const overall    = pivotOverall(filtered);
+  const pivot      = pivotByMatchAndPlacement(filtered);
+  const matchTypes = MATCH_TYPES.filter(mt => pivot.some(r => r.matchType===mt));
+
+  el.innerHTML = [
+    renderOverviewTable('OVERVIEW', sortPlacements(overall), 'sp'),
+    ...matchTypes.map(mt => renderOverviewTable(mt.toUpperCase(), sortPlacements(pivot.filter(r=>r.matchType===mt)), 'sp'))
+  ].join('');
+}
+
+// ============================================================
+// SB OVERVIEW TAB
+// Block 1: all rows; Block 2: SBV; Block 3: SB Headline
+// ============================================================
+function renderSBOverview() {
+  const el = document.getElementById('sb-overview-tables');
+  if (!G.sbRows.length) {
+    const diagPart = G.sbDiag
+      ? `<div style="font-family:monospace;font-size:11px;color:#e85d75;margin-top:10px;word-break:break-all">Diagnostic: ${escHtml(G.sbDiag)}</div>`
+      : '';
+    el.innerHTML = `<div class="empty-state-rich"><div class="empty-icon">📭</div><div class="empty-msg">No SB data loaded.<br>Upload a Sponsored Brands placement report to get started.${diagPart}</div></div>`;
+    return;
+  }
+
+  const portF   = (document.getElementById('sb-ov-portfolio-filter') || {}).value || '';
+  const searchF = ((document.getElementById('sb-ov-search') || {}).value || '').toLowerCase();
+
+  const baseRows = G.sbRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF) && !r.portfolio.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  document.getElementById('sb-overview-badge').textContent = baseRows.length + ' rows';
+
+  function sbAggregate(filterFn) {
+    const map = {};
+    for (const r of baseRows) {
+      if (!filterFn(r)) continue;
+      if (!map[r.placement]) map[r.placement] = { placement:r.placement, impressions:0, clicks:0, spend:0, sales:0, orders:0 };
+      const g = map[r.placement];
+      g.impressions += r.impressions; g.clicks += r.clicks;
+      g.spend += r.spend; g.sales += r.sales; g.orders += r.orders;
+    }
+    return sortPlacements(Object.values(map).map(g => ({
+      ...g,
+      ctr:  g.impressions > 0 ? g.clicks / g.impressions : 0,
+      cpc:  g.clicks > 0 ? g.spend / g.clicks : 0,
+      cvr:  g.clicks > 0 ? g.orders / g.clicks : 0,
+      acos: g.sales > 0 ? g.spend / g.sales : null,
+      roas: g.spend > 0 ? g.sales / g.spend : null,
+    })));
+  }
+
+  const allRows = sbAggregate(() => true);
+  // FIX: use pre-computed type field instead of re-scanning campaign name
+  const sbvRows = sbAggregate(r => r.type === 'SBV');
+  const sbhRows = sbAggregate(r => r.type === 'SB');
+
+  const parts = [renderOverviewTable('SB OVERVIEW', allRows, 'sb')];
+  if (sbvRows.length) parts.push(renderOverviewTable('SB VIDEO', sbvRows, 'sb'));
+  if (sbhRows.length) parts.push(renderOverviewTable('SB HEADLINE', sbhRows, 'sb'));
+  el.innerHTML = parts.join('');
+}
+
+function renderOverviewTable(title, rows, currType) {
+  const sorted = sortPlacements(rows);
+  // Compute per-column max for relative CTR/CVR coloring within this block
+  const ctrs = sorted.map(r=>r.ctr).filter(Boolean);
+  const cvrs = sorted.map(r=>r.cvr).filter(Boolean);
+  const maxCtr = Math.max(...ctrs, 0.001);
+  const maxCvr = Math.max(...cvrs, 0.001);
+
+  const trs = sorted.map(r => {
+    const ctrRatio = r.ctr / maxCtr;
+    const ctrCls = ctrRatio >= 0.7 ? 'ctr-high' : ctrRatio >= 0.35 ? 'ctr-mid' : 'ctr-low';
+    const cvrRatio = r.cvr / maxCvr;
+    const cvrCls = cvrRatio >= 0.7 ? 'cvr-high' : cvrRatio >= 0.35 ? 'cvr-mid' : 'cvr-low';
+    return `<tr>
+      <td class="placement-col">${escHtml(r.placement) || '–'}</td>
+      <td>${fmtNum(r.impressions)}</td>
+      <td>${fmtNum(r.clicks)}</td>
+      <td class="${ctrCls}">${fmtPct(r.ctr)}</td>
+      <td>${fmtCurr(r.cpc, currType)}</td>
+      <td>${fmtCurr(r.spend, currType)}</td>
+      <td>${fmtCurr(r.sales, currType)}</td>
+      <td class="${cvrCls}">${fmtPct(r.cvr)}</td>
+      <td class="acos-cell ${acosClass(r.acos)}">${fmtAcos(r.acos)}</td>
+      <td>${fmtRoas(r.roas)}</td>
+      <td>${fmtNum(r.orders)}</td>
+    </tr>`;
+  }).join('');
+
+  // Totals row — sums for counts/currency, weighted ratios for rates
+  const tImpr   = sorted.reduce((s,r) => s + r.impressions, 0);
+  const tClicks = sorted.reduce((s,r) => s + r.clicks, 0);
+  const tSpend  = sorted.reduce((s,r) => s + r.spend, 0);
+  const tSales  = sorted.reduce((s,r) => s + r.sales, 0);
+  const tOrders = sorted.reduce((s,r) => s + r.orders, 0);
+  const tCtr    = tImpr   > 0 ? tClicks / tImpr   : 0;
+  const tCvr    = tClicks > 0 ? tOrders / tClicks  : 0;
+  const tCpc    = tClicks > 0 ? tSpend  / tClicks  : 0;
+  const tAcos   = tSales  > 0 ? tSpend  / tSales   : null;
+  const tRoas   = tSpend  > 0 ? tSales  / tSpend   : null;
+
+  const totalRow = sorted.length > 1 ? `<tr class="overview-total-row">
+      <td class="placement-col">Total</td>
+      <td>${fmtNum(tImpr)}</td>
+      <td>${fmtNum(tClicks)}</td>
+      <td>${fmtPct(tCtr)}</td>
+      <td>${fmtCurr(tCpc, currType)}</td>
+      <td>${fmtCurr(tSpend, currType)}</td>
+      <td>${fmtCurr(tSales, currType)}</td>
+      <td>${fmtPct(tCvr)}</td>
+      <td class="${acosClass(tAcos)}">${fmtAcos(tAcos)}</td>
+      <td>${fmtRoas(tRoas)}</td>
+      <td>${fmtNum(tOrders)}</td>
+    </tr>` : '';
+
+  return `
+    <div class="overview-block">
+      <div class="overview-block-title">${escHtml(title)}</div>
+      <div style="overflow-x:auto">
+        <table class="overview-table">
+          <thead><tr>
+            <th>PLACEMENT</th><th>IMPRESSIONS</th><th>CLICKS</th><th>CTR</th>
+            <th>CPC</th><th>SPEND</th><th>SALES</th><th>CVR</th><th>ACOS</th><th>ROAS</th><th>ORDERS</th>
+          </tr></thead>
+          <tbody>${trs || '<tr><td colspan="11" class="empty-state">No data</td></tr>'}${totalRow}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// SP VIEW TOGGLE
+// ============================================================
+function toggleSPView() {
+  const btn = document.getElementById('sp-toggle-view-btn');
+  if (spView === 'flat') {
+    spView = 'aggregated';
+    btn.textContent = '⊟ Aggregated';
+    btn.classList.add('active');
+  } else {
+    spView = 'flat';
+    btn.textContent = '⊞ Flat Rows';
+    btn.classList.remove('active');
+  }
+  renderSPTable();
+}
+
+function toggleAccordionRows(className) {
+  const rows = document.getElementsByClassName(className);
+  for (const row of rows) row.classList.toggle('hidden-row');
+  // Flip the expand/collapse indicator on the header
+  const headers = document.querySelectorAll(`[data-accordion="${className}"]`);
+  headers.forEach(h => {
+    h.textContent = h.textContent.includes('▶') ? '▼ Collapse' : '▶ Expand';
+  });
+}
+
+// ============================================================
+// ALERT SYSTEM — Bleeder & Wasted Spend
+// ============================================================
+/**
+ * Evaluate placement-level alert rules (CRITICAL overrides HIGH).
+ * Returns an HTML badge string, or '' if no alert.
+ *
+ * Thresholds (spend in dataset currency):
+ *   🛑 Wasted Spend  [CRITICAL] — spend ≥ 25 AND orders = 0
+ *   🚨 Bleeder       [HIGH]     — spend ≥ 15 AND orders ≤ 1 AND ACoS ≥ 60%
+ *
+ * False-positive guard:
+ *   Skip row unless impressions ≥ 1000 OR spend ≥ 50
+ */
+function getAlertBadge(r) {
+  const spend       = r.spend       || 0;
+  const orders      = r.orders      || 0;
+  const impressions = r.impressions || 0;
+  const acos        = r.acos;          // stored as ratio: 0.60 = 60%
+
+  // Minimum data threshold — avoid flagging sparse / noisy rows
+  if (impressions < 1000 && spend < 50) return '';
+
+  // CRITICAL — Wasted Spend (overrides Bleeder)
+  if (spend >= 25 && orders === 0) {
+    return `<span class="alert-badge alert-wasted">🛑 Wasted Spend</span>`;
+  }
+
+  // HIGH — Bleeder
+  if (spend >= 15 && orders <= 1 && acos != null && acos >= 0.60) {
+    return `<span class="alert-badge alert-bleeder">🚨 Bleeder</span>`;
+  }
+
+  return '';
+}
+
+/** Returns the plain text label (for Excel export), or '' */
+function getAlertLabel(r) {
+  const spend = r.spend || 0, orders = r.orders || 0;
+  const impr  = r.impressions || 0, acos = r.acos;
+  const parts = [];
+  if (r.acos != null && r.acos <= 0.12 && r.orders >= 2) parts.push('🚀 Scale');
+  if (impr >= 1000 || spend >= 50) {
+    if (spend >= 25 && orders === 0) parts.push('🛑 Wasted Spend');
+    else if (spend >= 15 && orders <= 1 && acos != null && acos >= 0.60) parts.push('🚨 Bleeder');
+  }
+  return parts.join(' | ');
+}
+
+/** Summarise child-level alerts for an aggregated group header row */
+function getGroupAlertSummary(rows) {
+  let wasted = 0, bleeder = 0;
+  rows.forEach(r => {
+    const lbl = getAlertLabel(r);
+    if (lbl.includes('Wasted')) wasted++;
+    else if (lbl.includes('Bleeder')) bleeder++;
+  });
+  const parts = [];
+  if (wasted)  parts.push(`<span class="alert-flag">🛑 ${wasted} Wasted</span>`);
+  if (bleeder) parts.push(`<span class="alert-flag" style="color:#ff3b30">🚨 ${bleeder} Bleeder</span>`);
+  return parts.join(' ');
+}
+
+// ============================================================
+// MINI SUMMARY CARDS
+// ============================================================
+function renderMiniCards(containerId, rows, currType) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!rows.length) { el.innerHTML = ''; return; }
+
+  const totalSpend  = rows.reduce((s, r) => s + r.spend, 0);
+  const totalSales  = rows.reduce((s, r) => s + r.sales, 0);
+  const avgAcos     = totalSales > 0 ? totalSpend / totalSales : null;
+  let wastedCount = 0, bleederCount = 0;
+  rows.forEach(r => {
+    const lbl = getAlertLabel(r);
+    if (lbl.includes('Wasted'))  wastedCount++;
+    else if (lbl.includes('Bleeder')) bleederCount++;
+  });
+
+  el.innerHTML = `<div class="mini-cards-row">
+    <div class="mini-card">
+      <div class="mini-card-label">Total Spend</div>
+      <div class="mini-card-value">${fmtCurr(totalSpend, currType)}</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-card-label">Total Sales</div>
+      <div class="mini-card-value">${fmtCurr(totalSales, currType)}</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-card-label">Avg ACoS</div>
+      <div class="mini-card-value ${acosClass(avgAcos)}">${avgAcos != null ? (avgAcos*100).toFixed(1)+'%' : '–'}</div>
+    </div>
+    <div class="mini-card wasted-card alert-card">
+      <div class="mini-card-label">🛑 Wasted Spend</div>
+      <div class="mini-card-value">${wastedCount} row${wastedCount !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="mini-card bleeder-card alert-card">
+      <div class="mini-card-label">🚨 Bleeders</div>
+      <div class="mini-card-value">${bleederCount} row${bleederCount !== 1 ? 's' : ''}</div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// SP TABLE
+// ============================================================
+function renderSPTable() {
+  const portF   = document.getElementById('sp-portfolio-filter').value;
+  const matchF  = document.getElementById('sp-match-filter').value;
+  const placeF  = document.getElementById('sp-placement-filter').value.toLowerCase();
+  const searchF = document.getElementById('sp-search').value.toLowerCase();
+
+  let filtered = G.spRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (matchF  && r.matchType !== matchF) return false;
+    if (placeF  && !r.placement.toLowerCase().includes(placeF)) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF) && !r.portfolio.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  if (spSort.col) {
+    filtered.sort((a,b)=>{
+      const av = a[spSort.col]??-Infinity, bv = b[spSort.col]??-Infinity;
+      return (av<bv?-1:av>bv?1:0)*spSort.dir;
+    });
+  }
+
+  document.getElementById('sp-count').textContent = filtered.length + ' rows';
+  renderMiniCards('sp-summary-cards', filtered, 'sp');
+  const tbody = document.getElementById('sp-tbody');
+
+  if (spView === 'flat') {
+    // FLAT VIEW — one row per record
+    tbody.innerHTML = filtered.map(r => {
+      const scaleBadge = (r.acos != null && r.acos <= 0.12 && r.orders >= 2)
+        ? `<span class="rocket-badge">🚀 Scale</span>` : '';
+      const alertBadge = getAlertBadge(r);
+      const alertCell  = [scaleBadge, alertBadge].filter(Boolean).join('<br>');
+      return `<tr>
+        <td>${placementBadge(r.placement)}</td>
+        <td class="campaign-cell" title="${escHtml(r.campaign)}">${escHtml(r.campaign)}</td>
+        <td>${escHtml(r.matchType||'–')}</td>
+        <td>${fmtNum(r.impressions)}</td>
+        <td>${fmtNum(r.clicks)}</td>
+        <td class="${ctrClass(r.ctr)}">${fmtPct(r.ctr)}</td>
+        <td>${fmtCurr(r.spend,'sp')}</td>
+        <td>${fmtCurr(r.sales,'sp')}</td>
+        <td class="${cvrClass(r.cvr)}">${fmtPct(r.cvr)}</td>
+        <td class="${acosClass(r.acos)}">${fmtAcos(r.acos)}</td>
+        <td>${fmtRoas(r.roas)}</td>
+        <td>${fmtNum(r.orders)}</td>
+        <td>${alertCell}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="13" class="empty-state">No data</td></tr>';
+
+  } else {
+    // AGGREGATED VIEW — grouped by campaign with expandable placement rows
+    const groups = {};
+    filtered.forEach(r => {
+      if (!groups[r.campaign]) groups[r.campaign] = [];
+      groups[r.campaign].push(r);
+    });
+
+    let html = '';
+    Object.keys(groups).forEach((name, idx) => {
+      const rows = groups[name];
+      const totalSpend  = rows.reduce((s, r) => s + r.spend, 0);
+      const totalSales  = rows.reduce((s, r) => s + r.sales, 0);
+      const totalOrders = rows.reduce((s, r) => s + r.orders, 0);
+      const totalClicks = rows.reduce((s, r) => s + r.clicks, 0);
+      const totalImpr   = rows.reduce((s, r) => s + r.impressions, 0);
+      const aggAcos     = totalSales > 0 ? totalSpend / totalSales : null;
+      const aggRoas     = totalSpend > 0 ? totalSales / totalSpend : null;
+      const aggCvr      = totalClicks > 0 ? totalOrders / totalClicks : 0;
+      const aggCtr      = totalImpr > 0 ? totalClicks / totalImpr : 0;
+      const childClass  = `sp-child-${idx}`;
+      const matchLabel  = rows[0].matchType || '–';
+      const scaleBadge   = (aggAcos != null && aggAcos <= 0.12 && totalOrders >= 2)
+        ? `<span class="rocket-badge">🚀 Scale</span>` : '';
+      const alertSummary = getGroupAlertSummary(rows);
+      const alertCell    = [scaleBadge, alertSummary].filter(Boolean).join('<br>');
+
+      html += `<tr class="campaign-group-header" onclick="toggleAccordionRows('${childClass}')">
+        <td><span data-accordion="${childClass}">▶ Expand</span></td>
+        <td class="campaign-cell" title="${escHtml(name)}">${escHtml(name)}</td>
+        <td>${escHtml(matchLabel)}</td>
+        <td>${fmtNum(totalImpr)}</td>
+        <td>${fmtNum(totalClicks)}</td>
+        <td class="${ctrClass(aggCtr)}">${fmtPct(aggCtr)}</td>
+        <td>${fmtCurr(totalSpend,'sp')}</td>
+        <td>${fmtCurr(totalSales,'sp')}</td>
+        <td class="${cvrClass(aggCvr)}">${fmtPct(aggCvr)}</td>
+        <td class="${acosClass(aggAcos)}">${fmtAcos(aggAcos)}</td>
+        <td>${fmtRoas(aggRoas)}</td>
+        <td>${fmtNum(totalOrders)}</td>
+        <td>${alertCell}</td>
+      </tr>`;
+
+      rows.forEach(r => {
+        const alertBadge = getAlertBadge(r);
+        html += `<tr class="${childClass} child-row hidden-row">
+          <td>${placementBadge(r.placement)}</td>
+          <td class="campaign-cell" style="opacity:0.7">${escHtml(r.placement)}</td>
+          <td>${escHtml(r.matchType||'–')}</td>
+          <td>${fmtNum(r.impressions)}</td>
+          <td>${fmtNum(r.clicks)}</td>
+          <td class="${ctrClass(r.ctr)}">${fmtPct(r.ctr)}</td>
+          <td>${fmtCurr(r.spend,'sp')}</td>
+          <td>${fmtCurr(r.sales,'sp')}</td>
+          <td class="${cvrClass(r.cvr)}">${fmtPct(r.cvr)}</td>
+          <td class="${acosClass(r.acos)}">${fmtAcos(r.acos)}</td>
+          <td>${fmtRoas(r.roas)}</td>
+          <td>${fmtNum(r.orders)}</td>
+          <td>${alertBadge}</td>
+        </tr>`;
+      });
+    });
+
+    tbody.innerHTML = html || '<tr><td colspan="13" class="empty-state">No data</td></tr>';
+  }
+}
+
+// ============================================================
+// SB VIEW TOGGLE
+// ============================================================
+function toggleSBView() {
+  const btn = document.getElementById('sb-toggle-view-btn');
+  if (sbView === 'flat') {
+    sbView = 'aggregated';
+    btn.textContent = '⊟ Aggregated';
+    btn.classList.add('active');
+  } else {
+    sbView = 'flat';
+    btn.textContent = '⊞ Flat Rows';
+    btn.classList.remove('active');
+  }
+  renderSBTable();
+}
+
+// ============================================================
+// SB TABLE — CTR, CVR, sortable, flat + aggregated views
+// ============================================================
+function renderSBTable() {
+  const portF   = document.getElementById('sb-portfolio-filter').value;
+  const typeF   = document.getElementById('sb-type-filter').value;
+  const placeF  = document.getElementById('sb-placement-filter2').value.toLowerCase();
+  const searchF = document.getElementById('sb-search').value.toLowerCase();
+
+  let filtered = G.sbRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (typeF   && r.type !== typeF) return false;
+    if (placeF  && !r.placement.toLowerCase().includes(placeF)) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  if (sbSort.col) {
+    filtered.sort((a,b) => {
+      const av = a[sbSort.col]??-Infinity, bv = b[sbSort.col]??-Infinity;
+      return (av<bv?-1:av>bv?1:0)*sbSort.dir;
+    });
+  }
+
+  document.getElementById('sb-count').textContent = filtered.length + ' rows';
+  renderMiniCards('sb-summary-cards', filtered, 'sb');
+  const tbody = document.getElementById('sb-tbody');
+
+  if (sbView === 'flat') {
+    tbody.innerHTML = filtered.map(r => {
+      const scaleBadge = (r.acos != null && r.acos <= 0.12 && r.orders >= 2)
+        ? `<span class="rocket-badge">🚀 Scale</span>` : '';
+      const alertBadge = getAlertBadge(r);
+      const alertCell  = [scaleBadge, alertBadge].filter(Boolean).join('<br>');
+      return `<tr>
+        <td>${placementBadge(r.placement)}</td>
+        <td class="campaign-cell" title="${escHtml(r.campaign)}">${escHtml(r.campaign)}</td>
+        <td>${escHtml(r.type)}</td>
+        <td>${fmtNum(r.impressions)}</td>
+        <td>${fmtNum(r.clicks)}</td>
+        <td class="${ctrClass(r.ctr)}">${fmtPct(r.ctr)}</td>
+        <td>${fmtCurr(r.spend,'sb')}</td>
+        <td>${fmtCurr(r.sales,'sb')}</td>
+        <td class="${cvrClass(r.cvr)}">${fmtPct(r.cvr)}</td>
+        <td class="${acosClass(r.acos)}">${fmtAcos(r.acos)}</td>
+        <td>${fmtRoas(r.roas)}</td>
+        <td>${fmtNum(r.orders)}</td>
+        <td>${alertCell}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="13" class="empty-state">No SB data</td></tr>';
+
+  } else {
+    // AGGREGATED VIEW — grouped by campaign
+    const groups = {};
+    filtered.forEach(r => {
+      if (!groups[r.campaign]) groups[r.campaign] = [];
+      groups[r.campaign].push(r);
+    });
+
+    let html = '';
+    Object.keys(groups).forEach((name, idx) => {
+      const rows       = groups[name];
+      const totalSpend  = rows.reduce((s,r) => s + r.spend, 0);
+      const totalSales  = rows.reduce((s,r) => s + r.sales, 0);
+      const totalOrders = rows.reduce((s,r) => s + r.orders, 0);
+      const totalClicks = rows.reduce((s,r) => s + r.clicks, 0);
+      const totalImpr   = rows.reduce((s,r) => s + r.impressions, 0);
+      const aggAcos     = totalSales  > 0 ? totalSpend  / totalSales  : null;
+      const aggRoas     = totalSpend  > 0 ? totalSales  / totalSpend  : null;
+      const aggCvr      = totalClicks > 0 ? totalOrders / totalClicks : 0;
+      const aggCtr      = totalImpr   > 0 ? totalClicks / totalImpr   : 0;
+      const childClass  = `sb-child-${idx}`;
+      const typeLabel   = rows[0].type || '–';
+      const scaleBadge   = (aggAcos != null && aggAcos <= 0.12 && totalOrders >= 2)
+        ? `<span class="rocket-badge">🚀 Scale</span>` : '';
+      const alertSummary = getGroupAlertSummary(rows);
+      const alertCell    = [scaleBadge, alertSummary].filter(Boolean).join('<br>');
+
+      html += `<tr class="campaign-group-header" onclick="toggleAccordionRows('${childClass}')">
+        <td><span data-accordion="${childClass}">▶ Expand</span></td>
+        <td class="campaign-cell" title="${escHtml(name)}">${escHtml(name)}</td>
+        <td>${escHtml(typeLabel)}</td>
+        <td>${fmtNum(totalImpr)}</td>
+        <td>${fmtNum(totalClicks)}</td>
+        <td class="${ctrClass(aggCtr)}">${fmtPct(aggCtr)}</td>
+        <td>${fmtCurr(totalSpend,'sb')}</td>
+        <td>${fmtCurr(totalSales,'sb')}</td>
+        <td class="${cvrClass(aggCvr)}">${fmtPct(aggCvr)}</td>
+        <td class="${acosClass(aggAcos)}">${fmtAcos(aggAcos)}</td>
+        <td>${fmtRoas(aggRoas)}</td>
+        <td>${fmtNum(totalOrders)}</td>
+        <td>${alertCell}</td>
+      </tr>`;
+
+      rows.forEach(r => {
+        const alertBadge = getAlertBadge(r);
+        html += `<tr class="${childClass} child-row hidden-row">
+          <td>${placementBadge(r.placement)}</td>
+          <td class="campaign-cell" style="opacity:0.7">${escHtml(r.placement)}</td>
+          <td>${escHtml(r.type)}</td>
+          <td>${fmtNum(r.impressions)}</td>
+          <td>${fmtNum(r.clicks)}</td>
+          <td class="${ctrClass(r.ctr)}">${fmtPct(r.ctr)}</td>
+          <td>${fmtCurr(r.spend,'sb')}</td>
+          <td>${fmtCurr(r.sales,'sb')}</td>
+          <td class="${cvrClass(r.cvr)}">${fmtPct(r.cvr)}</td>
+          <td class="${acosClass(r.acos)}">${fmtAcos(r.acos)}</td>
+          <td>${fmtRoas(r.roas)}</td>
+          <td>${fmtNum(r.orders)}</td>
+          <td>${alertBadge}</td>
+        </tr>`;
+      });
+    });
+
+    tbody.innerHTML = html || '<tr><td colspan="13" class="empty-state">No SB data</td></tr>';
+  }
+}
+
+// ============================================================
+// PORTFOLIO FILTERS
+// ============================================================
+function populateSPPortfolioFilter() {
+  const portfolios = [...new Set(G.spRows.map(r=>r.portfolio).filter(Boolean))].sort();
+  document.getElementById('sp-portfolio-filter').innerHTML =
+    '<option value="">All Portfolios</option>' + portfolios.map(p=>`<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
+}
+
+function populateSBPortfolioFilter() {
+  const portfolios = [...new Set(G.sbRows.map(r=>r.portfolio).filter(Boolean))].sort();
+  document.getElementById('sb-portfolio-filter').innerHTML =
+    '<option value="">All Portfolios</option>' + portfolios.map(p=>`<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
+}
+
+function populateSPOvPortfolioFilter() {
+  const portfolios = [...new Set(G.spRows.map(r=>r.portfolio).filter(Boolean))].sort();
+  const el = document.getElementById('sp-ov-portfolio-filter');
+  if (!el) return;
+  el.innerHTML = '<option value="">All Portfolios</option>' + portfolios.map(p=>`<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
+}
+
+function populateSBOvPortfolioFilter() {
+  const portfolios = [...new Set(G.sbRows.map(r=>r.portfolio).filter(Boolean))].sort();
+  const el = document.getElementById('sb-ov-portfolio-filter');
+  if (!el) return;
+  el.innerHTML = '<option value="">All Portfolios</option>' + portfolios.map(p=>`<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
+}
+
+// ============================================================
+// TABS
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ============================================================
+// FILTER EVENTS
+// ============================================================
+['sp-portfolio-filter','sp-match-filter','sp-placement-filter','sp-search'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderSPTable);
+  document.getElementById(id).addEventListener('input', renderSPTable);
+});
+['sb-portfolio-filter','sb-type-filter','sb-placement-filter2','sb-search'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderSBTable);
+  document.getElementById(id).addEventListener('input', renderSBTable);
+});
+
+// Overview filters (event delegation)
+document.addEventListener('change', e => {
+  if (e.target.id === 'sp-ov-portfolio-filter') renderSPOverview();
+  if (e.target.id === 'sb-ov-portfolio-filter') renderSBOverview();
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'sp-ov-search') renderSPOverview();
+  if (e.target.id === 'sb-ov-search') renderSBOverview();
+});
+
+// ============================================================
+// SORT — SP table
+// ============================================================
+document.getElementById('sp-table').querySelector('thead').addEventListener('click', e => {
+  const th = e.target.closest('th');
+  if (!th || !th.dataset.col) return;
+  const c = th.dataset.col;
+  if (spSort.col === c) spSort.dir *= -1;
+  else { spSort.col = c; spSort.dir = -1; }
+  document.getElementById('sp-table').querySelectorAll('th').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
+  th.classList.add(spSort.dir===1?'sort-asc':'sort-desc');
+  renderSPTable();
+});
+
+// ============================================================
+// SORT — SB table
+// ============================================================
+document.getElementById('sb-table').querySelector('thead').addEventListener('click', e => {
+  const th = e.target.closest('th');
+  if (!th || !th.dataset.col) return;
+  const c = th.dataset.col;
+  if (sbSort.col === c) sbSort.dir *= -1;
+  else { sbSort.col = c; sbSort.dir = -1; }
+  document.getElementById('sb-table').querySelectorAll('th').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
+  th.classList.add(sbSort.dir===1?'sort-asc':'sort-desc');
+  renderSBTable();
+});
+
+// ============================================================
+// EXCEL EXPORT HELPERS
+// ============================================================
+function downloadXLSX(wb, filename) {
+  XLSX.writeFile(wb, filename);
+}
+
+function pctVal(n) { return (n != null && !isNaN(n)) ? parseFloat((n * 100).toFixed(2)) : ''; }
+function numVal(n) { return (n != null && !isNaN(n)) ? parseFloat(n.toFixed(2)) : ''; }
+
+function overviewBlockToAoa(title, rows, type) {
+  const sym = type === 'sb' ? '£' : '$';
+  const headers = ['Placement','Impressions','Clicks','CTR %','CPC','Spend','Sales','CVR %','ACoS %','ROAS','Orders'];
+  const out = [[title], headers];
+  rows.forEach(r => out.push([
+    r.placement,
+    r.impressions,
+    r.clicks,
+    pctVal(r.ctr),
+    numVal(r.cpc),
+    numVal(r.spend),
+    numVal(r.sales),
+    pctVal(r.cvr),
+    pctVal(r.acos),
+    numVal(r.roas),
+    r.orders
+  ]));
+  if (rows.length > 1) {
+    const tI  = rows.reduce((s,r) => s + r.impressions, 0);
+    const tCl = rows.reduce((s,r) => s + r.clicks, 0);
+    const tSp = rows.reduce((s,r) => s + r.spend, 0);
+    const tSa = rows.reduce((s,r) => s + r.sales, 0);
+    const tOr = rows.reduce((s,r) => s + r.orders, 0);
+    out.push([
+      'TOTAL', tI, tCl,
+      pctVal(tI  > 0 ? tCl / tI  : 0),
+      numVal(tCl > 0 ? tSp / tCl : 0),
+      numVal(tSp), numVal(tSa),
+      pctVal(tCl > 0 ? tOr / tCl : 0),
+      pctVal(tSa > 0 ? tSp / tSa : null),
+      numVal(tSp > 0 ? tSa / tSp : null),
+      tOr
+    ]);
+  }
+  out.push([]); // blank separator row
+  return out;
+}
+
+// ============================================================
+// EXPORT — SP Overview
+// ============================================================
+function exportSPOverview() {
+  const portF   = (document.getElementById('sp-ov-portfolio-filter') || {}).value || '';
+  const searchF = ((document.getElementById('sp-ov-search') || {}).value || '').toLowerCase();
+  const filtered = G.spRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF) && !r.portfolio.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+  const overall   = sortPlacements(pivotOverall(filtered));
+  const pivot     = pivotByMatchAndPlacement(filtered);
+  const matchTypes = MATCH_TYPES.filter(mt => pivot.some(r => r.matchType === mt));
+
+  let aoa = overviewBlockToAoa('OVERVIEW', overall, 'sp');
+  matchTypes.forEach(mt => {
+    aoa = aoa.concat(overviewBlockToAoa(mt.toUpperCase(), sortPlacements(pivot.filter(r => r.matchType === mt)), 'sp'));
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SP Overview');
+  downloadXLSX(wb, 'sp_overview.xlsx');
+}
+
+// ============================================================
+// EXPORT — SB Overview
+// ============================================================
+function exportSBOverview() {
+  const portF   = (document.getElementById('sb-ov-portfolio-filter') || {}).value || '';
+  const searchF = ((document.getElementById('sb-ov-search') || {}).value || '').toLowerCase();
+  const baseRows = G.sbRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF) && !r.portfolio.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  function agg(filterFn) {
+    const map = {};
+    for (const r of baseRows) {
+      if (!filterFn(r)) continue;
+      if (!map[r.placement]) map[r.placement] = { placement: r.placement, impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0 };
+      const g = map[r.placement];
+      g.impressions += r.impressions; g.clicks += r.clicks;
+      g.spend += r.spend; g.sales += r.sales; g.orders += r.orders;
+    }
+    return sortPlacements(Object.values(map).map(g => ({
+      ...g,
+      ctr:  g.impressions > 0 ? g.clicks  / g.impressions : 0,
+      cpc:  g.clicks > 0      ? g.spend   / g.clicks      : 0,
+      cvr:  g.clicks > 0      ? g.orders  / g.clicks      : 0,
+      acos: g.sales  > 0      ? g.spend   / g.sales       : null,
+      roas: g.spend  > 0      ? g.sales   / g.spend       : null
+    })));
+  }
+
+  let aoa = overviewBlockToAoa('SB OVERVIEW', agg(() => true), 'sb');
+  const sbvRows = agg(r => r.type === 'SBV');
+  const sbhRows = agg(r => r.type === 'SB');
+  if (sbvRows.length) aoa = aoa.concat(overviewBlockToAoa('SB VIDEO',    sbvRows, 'sb'));
+  if (sbhRows.length) aoa = aoa.concat(overviewBlockToAoa('SB HEADLINE', sbhRows, 'sb'));
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SB Overview');
+  downloadXLSX(wb, 'sb_overview.xlsx');
+}
+
+// ============================================================
+// EXPORT — SP Campaigns
+// ============================================================
+function exportSPCampaigns() {
+  const portF   = document.getElementById('sp-portfolio-filter').value;
+  const matchF  = document.getElementById('sp-match-filter').value;
+  const placeF  = document.getElementById('sp-placement-filter').value.toLowerCase();
+  const searchF = document.getElementById('sp-search').value.toLowerCase();
+
+  const rows = G.spRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (matchF  && r.matchType !== matchF) return false;
+    if (placeF  && !r.placement.toLowerCase().includes(placeF)) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF) && !r.portfolio.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  const headers = ['Placement','Campaign','Match Type','Impressions','Clicks','CTR %','Spend','Sales','CVR %','ACoS %','ROAS','Orders','Alert'];
+  const data = rows.map(r => [
+    shortPlacement(r.placement) || r.placement,
+    r.campaign,
+    r.matchType || '',
+    r.impressions,
+    r.clicks,
+    pctVal(r.ctr),
+    numVal(r.spend),
+    numVal(r.sales),
+    pctVal(r.cvr),
+    pctVal(r.acos),
+    numVal(r.roas),
+    r.orders,
+    getAlertLabel(r)
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SP Campaigns');
+  downloadXLSX(wb, 'sp_campaigns.xlsx');
+}
+
+// ============================================================
+// EXPORT — SB Campaigns
+// ============================================================
+function exportSBCampaigns() {
+  const portF   = document.getElementById('sb-portfolio-filter').value;
+  const typeF   = document.getElementById('sb-type-filter').value;
+  const placeF  = document.getElementById('sb-placement-filter2').value.toLowerCase();
+  const searchF = document.getElementById('sb-search').value.toLowerCase();
+
+  const rows = G.sbRows.filter(r => {
+    if (portF   && r.portfolio !== portF) return false;
+    if (typeF   && r.type !== typeF) return false;
+    if (placeF  && !r.placement.toLowerCase().includes(placeF)) return false;
+    if (searchF && !r.campaign.toLowerCase().includes(searchF)) return false;
+    return true;
+  });
+
+  const headers = ['Placement','Campaign','Type','Impressions','Clicks','CTR %','Spend','Sales','CVR %','ACoS %','ROAS','Orders','Alert'];
+  const data = rows.map(r => [
+    shortPlacement(r.placement) || r.placement,
+    r.campaign,
+    r.type || '',
+    r.impressions,
+    r.clicks,
+    pctVal(r.ctr),
+    numVal(r.spend),
+    numVal(r.sales),
+    pctVal(r.cvr),
+    pctVal(r.acos),
+    numVal(r.roas),
+    r.orders,
+    getAlertLabel(r)
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SB Campaigns');
+  downloadXLSX(wb, 'sb_campaigns.xlsx');
+}
+</script>
+</body>
+</html>
